@@ -1,0 +1,5 @@
+layers.o
+main.o
+micronn
+mnist_loader.o
+train.o
