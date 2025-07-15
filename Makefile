@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -Wall -O2 -std=c++11
 
 TARGET = micronn
-SRC = main.cpp layers.cpp mnist_loader.cpp train.cpp
+SRC = main.cpp layers.cpp mnist_loader.cpp train.cpp model.cpp inference.cpp
 OBJ = $(SRC:.cpp=.o)
 
 all: $(TARGET)

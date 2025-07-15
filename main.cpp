@@ -4,7 +4,11 @@
 #include "layers.h"
 #include "mnist_loader.h"
 #include "train.h"
+#include "model.h"
+#include "inference.h"
 #include <cmath>
+#include <cstring>
+#include <cstdlib>
 
 #define INPUT_SIZE 784  // 28 x 28 image
 #define HIDDEN_SIZE 128 // number of hiden neurones
@@ -15,61 +19,84 @@ float evaluate_accuracy(float *W1, float *b1,
                         float *W2, float *b2,
                         int input_size, int hidden_size, int output_size);
 
-int main()
+int main(int argc, char **argv)
 {
+
     srand(time(NULL));
     float W1[HIDDEN_SIZE * INPUT_SIZE];
     float b1[HIDDEN_SIZE];
     float W2[HIDDEN_SIZE * OUTPUT_SIZE];
     float b2[OUTPUT_SIZE];
 
-    // Allows to initialize Xavier weights
-    float limit1 = std::sqrt(6.0f / (INPUT_SIZE + HIDDEN_SIZE));
-    float limit2 = std::sqrt(6.0f / (HIDDEN_SIZE + OUTPUT_SIZE));
-
-    for (int i = 0; i < HIDDEN_SIZE * INPUT_SIZE; ++i)
-        W1[i] = ((float)rand() / RAND_MAX * 2 - 1) * limit1;
-    for (int i = 0; i < HIDDEN_SIZE; ++i)
-        b1[i] = 0.0f;
-
-    for (int i = 0; i < OUTPUT_SIZE * HIDDEN_SIZE; ++i)
-        W2[i] = ((float)rand() / RAND_MAX * 2 - 1) * limit2;
-    for (int i = 0; i < OUTPUT_SIZE; ++i)
-        b2[i] = 0.0f;
-
-    float input[INPUT_SIZE];
-    for (int epoch = 0; epoch < EPOCHS; ++epoch)
+    const char *model_file = "model.bin";
+    if (load_model(W1, b1, W2, b2, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE, model_file))
     {
-        std::cout << "\n🔁 Epoch " << (epoch + 1) << " / " << EPOCHS << "\n";
+        std::cout << "📦 Modèle chargé depuis model.bin\n";
+    }
+    else
+    {
+        std::cout << "⚙️ Aucun modèle trouvé, on commence l'entraînement\n";
 
-        float total_loss = 0.0f;
+        // Allows to initialize Xavier weights
+        float limit1 = std::sqrt(6.0f / (INPUT_SIZE + HIDDEN_SIZE));
+        float limit2 = std::sqrt(6.0f / (HIDDEN_SIZE + OUTPUT_SIZE));
 
-        for (int step = 0; step < TRAIN_SIZE * 10; ++step)
+        for (int i = 0; i < HIDDEN_SIZE * INPUT_SIZE; ++i)
+            W1[i] = ((float)rand() / RAND_MAX * 2 - 1) * limit1;
+        for (int i = 0; i < HIDDEN_SIZE; ++i)
+            b1[i] = 0.0f;
+
+        for (int i = 0; i < OUTPUT_SIZE * HIDDEN_SIZE; ++i)
+            W2[i] = ((float)rand() / RAND_MAX * 2 - 1) * limit2;
+        for (int i = 0; i < OUTPUT_SIZE; ++i)
+            b2[i] = 0.0f;
+
+        float input[INPUT_SIZE];
+        for (int epoch = 0; epoch < EPOCHS; ++epoch)
         {
-            int index = rand() % TRAIN_SIZE;
-            int label = load_mnist_label("data/train-labels-idx1-ubyte", index);
-            if (!load_mnist_image("data/train-images-idx3-ubyte", index, input))
+            std::cout << "\n🔁 Epoch " << (epoch + 1) << " / " << EPOCHS << "\n";
+
+            float total_loss = 0.0f;
+
+            for (int step = 0; step < TRAIN_SIZE * 10; ++step)
             {
-                std::cerr << "Erreur lecture image\n";
-                continue;
+                int index = rand() % TRAIN_SIZE;
+                int label = load_mnist_label("data/train-labels-idx1-ubyte", index);
+                if (!load_mnist_image("data/train-images-idx3-ubyte", index, input))
+                {
+                    std::cerr << "Erreur lecture image\n";
+                    continue;
+                }
+
+                float loss = train_one_step(input, label, W1, b1, W2, b2, 0.001f, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE);
+                total_loss += loss;
+                if (step % 10000 == 0)
+                    std::cout << "Step " << step << " - Loss: " << loss << "\n";
+
+                if (step % 10000 == 0)
+                    std::cout << "Step " << step << " OK\n";
             }
+            float avg_loss = total_loss / (TRAIN_SIZE * 10);
+            std::cout << "📉 Moyenne loss (epoch " << (epoch + 1) << ") : " << avg_loss << "\n";
 
-            float loss = train_one_step(input, label, W1, b1, W2, b2, 0.001f, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE);
-            total_loss += loss;
-            if (step % 10000 == 0)
-                std::cout << "Step " << step << " - Loss: " << loss << "\n";
-
-            if (step % 10000 == 0)
-                std::cout << "Step " << step << " OK\n";
+            evaluate_accuracy(W1, b1, W2, b2, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE);
         }
-        float avg_loss = total_loss / (TRAIN_SIZE * 10);
-        std::cout << "📉 Moyenne loss (epoch " << (epoch + 1) << ") : " << avg_loss << "\n";
 
-        evaluate_accuracy(W1, b1, W2, b2, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE);
+        save_model(W1, b1, W2, b2, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE, model_file);
+        std::cout << "💾 Modèle sauvegardé dans model.bin\n";
+        std::cout << "Entraînement terminé ✅\n";
+    }
+    int index = 0;
+    if (argc == 3 && std::strcmp(argv[1], "--test") == 0)
+    {
+        index = std::atoi(argv[2]);
+    }
+    else
+    {
+        index = rand() % 10000;
     }
 
-    std::cout << "Entraînement terminé ✅\n";
-
+    predict_mnist_index(index, W1, b1, W2, b2, INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE);
     return 0;
 }
 
